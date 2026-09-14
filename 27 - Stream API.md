@@ -10,95 +10,154 @@ tags:
   - tools
 section: "Инструменты для автотестов"
 status: evergreen
-updated: 2026-07-21
+updated: 2026-09-14
 ---
 ## 27. Stream API
 
 > [!abstract] Коротко
-> Stream API — инструмент Java для обработки данных в функциональном стиле.
+> Stream API описывает конвейер обработки данных: источник → промежуточные операции → терминальная операция.
 
+### 27.1. Stream — не коллекция
 
-**Stream API** — инструмент Java для обработки данных в функциональном стиле.
-
-Stream чаще всего используют с коллекциями, чтобы:
-
-* фильтровать элементы;
-* преобразовывать элементы;
-* сортировать;
-* искать значения;
-* собирать результат в новую коллекцию.
-
----
-
-### 27.1. Как работает Stream
-
-Обычно работа со Stream состоит из трех частей:
-
-1. Источник данных: коллекция, массив или другой источник.
-2. Промежуточные операции: `filter`, `map`, `sorted`.
-3. Терминальная операция: `collect`, `toList`, `findFirst`, `count`.
-
-Пример:
+Stream не хранит данные. Он обрабатывает элементы из источника: коллекции, массива, файла, генератора и т.д.
 
 ```java
-List<String> names = List.of("Danil", "Anna", "Ivan");
-
 List<String> result = names.stream()
         .filter(name -> name.startsWith("A"))
-        .toList();
-```
-
----
-
-### 27.2. Основные методы Stream API
-
-| Метод | Для чего нужен |
-| --- | --- |
-| `filter()` | Оставляет элементы по условию |
-| `map()` | Преобразует элементы |
-| `sorted()` | Сортирует элементы |
-| `distinct()` | Убирает дубликаты |
-| `limit()` | Ограничивает количество элементов |
-| `forEach()` | Выполняет действие для каждого элемента |
-| `toList()` | Собирает результат в список |
-| `collect()` | Собирает результат через collector |
-| `findFirst()` | Возвращает первый подходящий элемент |
-| `count()` | Считает количество элементов |
-| `anyMatch()` | Проверяет, есть ли хотя бы один подходящий элемент |
-
----
-
-### 27.3. Примеры
-
-Фильтрация:
-
-```java
-List<Integer> result = numbers.stream()
-        .filter(number -> number > 10)
-        .toList();
-```
-
-Преобразование:
-
-```java
-List<String> upperNames = names.stream()
         .map(String::toUpperCase)
         .toList();
 ```
 
-Поиск:
+Обычный stream одноразовый: после терминальной операции повторно использовать тот же объект stream нельзя.
+
+---
+
+### 27.2. Промежуточные операции
+
+Промежуточные операции возвращают новый stream и обычно ленивы — вычисления запускаются только при терминальной операции.
+
+Частые операции:
+
+- `filter()` — фильтрация;
+- `map()` — преобразование;
+- `flatMap()` — разворачивание вложенных потоков;
+- `distinct()` — удаление дубликатов по `equals()`/`hashCode()`;
+- `sorted()` — сортировка;
+- `limit()` / `skip()` — ограничение/пропуск.
+
+```java
+Stream<String> pipeline = names.stream()
+        .filter(name -> name.length() > 3)
+        .map(String::toUpperCase);
+```
+
+До терминальной операции элементы могут ещё не обрабатываться.
+
+---
+
+### 27.3. Терминальные операции
+
+Они запускают обработку и завершают stream pipeline:
+
+- `toList()` / `collect()`;
+- `forEach()`;
+- `count()`;
+- `findFirst()` / `findAny()`;
+- `anyMatch()` / `allMatch()` / `noneMatch()`;
+- `min()` / `max()`;
+- `reduce()`.
+
+```java
+long count = names.stream()
+        .filter(name -> name.startsWith("A"))
+        .count();
+```
+
+---
+
+### 27.4. `Optional`
+
+Операции поиска могут не найти значение, поэтому `findFirst()`, `findAny()`, `min()` и `max()` возвращают `Optional`:
 
 ```java
 Optional<String> first = names.stream()
         .filter(name -> name.startsWith("D"))
         .findFirst();
+
+first.ifPresent(System.out::println);
+```
+
+Не стоит без проверки вызывать `optional.get()`. Обычно используют `orElse`, `orElseGet`, `orElseThrow`, `ifPresent`.
+
+---
+
+### 27.5. Изменяет ли Stream исходную коллекцию
+
+Операции вроде `filter()` и `map()` сами по себе исходную коллекцию не меняют:
+
+```java
+List<String> upper = names.stream()
+        .map(String::toUpperCase)
+        .toList();
+```
+
+Но side effects внутри `forEach`, `peek` или lambda технически возможны. Поэтому точнее говорить: Stream API рассчитан прежде всего на декларативные операции без изменения источника, но сам язык не делает side effects невозможными.
+
+---
+
+### 27.6. `map` и `flatMap`
+
+`map` преобразует один элемент в один результат:
+
+```java
+List<Integer> lengths = names.stream()
+        .map(String::length)
+        .toList();
+```
+
+`flatMap` полезен, когда каждый элемент даёт несколько вложенных элементов:
+
+```java
+List<String> words = lines.stream()
+        .flatMap(line -> Arrays.stream(line.split(" ")))
+        .toList();
 ```
 
 ---
 
-### 27.4. Что важно сказать на скрининге
+### 27.7. `reduce`
 
-Stream API нужен для удобной обработки коллекций: фильтрации, преобразования, сортировки и поиска. Stream не изменяет исходную коллекцию, а строит цепочку операций и возвращает результат.
+`reduce` сворачивает поток в одно значение:
+
+```java
+int sum = numbers.stream()
+        .reduce(0, Integer::sum);
+```
+
+Для примитивных чисел часто удобнее специализированные потоки:
+
+```java
+int sum = numbers.stream()
+        .mapToInt(Integer::intValue)
+        .sum();
+```
+
+---
+
+### 27.8. Parallel stream
+
+```java
+names.parallelStream()
+```
+
+Параллельный stream не является автоматическим ускорением. Он добавляет стоимость распараллеливания и требует особенно внимательно относиться к side effects и thread safety.
+
+---
+
+### 27.9. Что сказать на скрининге
+
+Stream API строит ленивый pipeline обработки данных. Промежуточные операции (`filter`, `map`, `sorted`) формируют pipeline, терминальная операция (`toList`, `count`, `findFirst`) запускает вычисление. Stream не является коллекцией и обычно используется один раз.
+
 ---
 
 ## Связанные заметки
